@@ -1,61 +1,82 @@
 package com.Test.Test.com.Test.Test;
 
-import javax.ws.rs.core.MediaType;
-
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
-import org.apache.solr.client.solrj.impl.XMLResponseParser;
-import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.common.SolrDocumentList;
-
-import java.io.IOException;
+import java.util.Iterator;
 import java.util.Optional;
 
-import javax.json.JsonArray;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 
 
 
 public class RESTAPI {
 	
 	private static String url = "https://opendata-ajuntament.barcelona.cat/data/api/3/action/package_search";
+	private static final String CODE = "code";
+	private static final String DESCRIPTION = "description";
+	private static final String ORGANIZATION = "organization";
+	private static final String URL_TORNADA = "url_tornada";
+	private static String language;
 	
-	public static void doRequest(String language) {
-		SolrQuery query = mountFilterQuery(language);
-		QueryResponse qr = new QueryResponse();
+	public  Result doRequest(String languagep,String urlp) {
+		language = languagep;
 		
+		 mountFilterQuery();
 		 		
+		Client client = ClientBuilder.newClient();
+		WebTarget target = client.target(url);
+		String response = target.request(MediaType.TEXT_HTML).get(String.class);
 		
-		HttpSolrClient solr = new HttpSolrClient.Builder(url).build();
-		solr.setParser(new XMLResponseParser());
+		Result result = getOrganizationData(new JSONObject(response).getJSONObject("result").getJSONArray("results"),0,
+																													new Result());
+			return result;
+	}
+	private  Result getOrganizationData(JSONArray results,int i,Result result) {
 		
-		try {
-			 qr = solr.query(query);
+		if(i >= results.length())
+			return result;
+		
+			JSONObject element = results.getJSONObject(i);
+			runThroughKeys(element.keys(),element,result);
 			
-		} catch (SolrServerException | IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			return getOrganizationData(results,++i,result);
+	}
+	private  Result runThroughKeys(Iterator<String> keys, JSONObject element, Result result) {
+		// TODO Auto-generated method stub
+		if(!keys.hasNext()) 
+			return result;
+		
+		Organization organization  = new Organization();				
+		String k = keys.next().toString();
+		
+		if(k.equals(ORGANIZATION)) {
+			organization.setCode(element.getJSONObject(k).getString(CODE));
+			organization.setDesctiption(element.getJSONObject(k).getString(DESCRIPTION));
+			result.getLo().add(organization);
+		
+		}		
+		if(k.equals(URL_TORNADA)) {
+			result.getUrl_tornada().add(element.getJSONObject(k).getString(getLanguageString()));
+			
 		}
-		SolrDocumentList sdl = qr.getResults();
 		
-		sdl.forEach(doc -> {
-			System.out.println(doc.getFieldValue("organization.code"));
-			System.out.println(doc.getFieldValue("organization.description"));
-		});
+				
+		return runThroughKeys(keys,element,result);
 		
 		
 	}
-	private static SolrQuery mountFilterQuery(String language) {
+	private  String getLanguageString() {
+		// TODO Auto-generated method stub
 		Optional<String> stropt = Optional.ofNullable(language);
-		SolrQuery query = new SolrQuery();
-		
-		query.setQuery("*:*");
-		
-		return query;
-		
-		//url +="?facet.field=[" + "\"" +stropt.orElse("ca") + "\"" + "]";	
+		return stropt.orElse("ca");
 	}
+	private  void mountFilterQuery() {
+		url +="?facet.field=[" + "\"" +getLanguageString() + "\"" + "]";	
+	}
+	
 }
